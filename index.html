@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Readeout — Data Analysis Instrument</title>
+
+<!-- Favicon & PWA icons -->
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0A0C10">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Readeout">
+
+<!-- SEO -->
+<meta name="description" content="Readeout is a browser-based data analysis instrument. Drop in a CSV or spreadsheet and instantly get readouts, charts, and exports — nothing ever leaves your browser.">
+<meta name="keywords" content="data analysis, csv analysis tool, browser data viewer, data visualization, charts, readeout, client-side analytics">
+<meta name="author" content="BeepeeLabs">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://readeout.vercel.app/">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Readeout — Data Analysis Instrument">
+<meta property="og:description" content="Drop in a CSV or spreadsheet and instantly get readouts, charts, and exports. Runs entirely in your browser — nothing is uploaded anywhere.">
+<meta property="og:image" content="https://readeout.vercel.app/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:url" content="https://readeout.vercel.app/">
+<meta property="og:site_name" content="Readeout">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Readeout — Data Analysis Instrument">
+<meta name="twitter:description" content="Drop in a CSV or spreadsheet and instantly get readouts, charts, and exports. Runs entirely in your browser.">
+<meta name="twitter:image" content="https://readeout.vercel.app/og-image.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://cdnjs.cloudflare.com">
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<!-- Deferred: these don't block HTML parsing/first paint, and load in parallel while
+     execution still happens in document order, right before DOMContentLoaded. -->
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@2.0.1/dist/chartjs-chart-matrix.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@sgratzl/chartjs-chart-boxplot@4.4.4/build/index.umd.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <img class="logo" src="https://cdn.phototourl.com/free/2026-07-10-2573f064-8e06-4b8c-a495-a47d53608137.png" alt="Readeout logo" width="220" height="112" decoding="async" fetchpriority="high">
+      <div class="dot" id="statusDot"></div>
+      <h1>READEOUT</h1>
+    </div>
+    <div class="status" id="statusText">NO SIGNAL</div>
+  </header>
+
+  <div class="tray" id="tray">
+    <div class="left">
+      <div class="slot mono">CSV<br>JSON</div>
+      <div>
+        <h2>Load a dataset</h2>
+        <p>Drop a <span class="key">.csv</span> or <span class="key">.json</span> file here, or browse</p>
+      </div>
+    </div>
+    <div>
+      <button type="button" class="btn ghost" id="historyBtn">History<span class="hist-badge" id="historyBadge"></span></button>
+      <button type="button" class="btn" id="browseBtn">Browse file</button>
+      <input type="file" id="fileInput" accept=".csv,.json,application/json,text/csv">
+    </div>
+  </div>
+  <div class="history-panel" id="historyPanel">
+    <div class="history-head">
+      <span>Saved sessions <span class="mono" id="historyCount"></span></span>
+      <button type="button" class="btn ghost small" id="closeHistoryBtn">Close</button>
+    </div>
+    <div class="history-list" id="historyList"></div>
+    <div class="history-note">Stored only in this browser — nothing leaves your device.</div>
+  </div>
+  <div id="fileMeta"></div>
+  <div id="err"></div>
+
+  <div class="preview-panel" id="previewPanel">
+    <div class="panel-title">
+      <h3>Preview</h3>
+      <div class="controls">
+        <span class="row-count mono" id="previewCount"></span>
+      </div>
+    </div>
+    <div class="table-wrap preview-wrap">
+      <table>
+        <thead><tr id="previewHead"></tr></thead>
+        <tbody id="previewBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="readeouts" id="readeouts"></div>
+
+  <div class="main" id="main">
+
+    <div class="panel-title">
+      <h3>Column summary</h3>
+      <div class="controls">
+        <button class="btn ghost small" id="resetBtn">Load new file</button>
+      </div>
+    </div>
+    <div class="cols-grid" id="colsGrid"></div>
+
+    <div class="view-tabs" id="viewTabs">
+      <button type="button" class="view-tab active" id="viewTabSingle" data-view="single">Single chart</button>
+      <button type="button" class="view-tab" id="viewTabDashboard" data-view="dashboard">Dashboard</button>
+    </div>
+
+    <div id="singleChartView">
+    <div class="panel-title">
+      <h3>Chart</h3>
+      <div class="controls">
+        <select id="chartType">
+          <option value="bar">Bar</option>
+          <option value="line">Line</option>
+          <option value="area">Area</option>
+          <option value="scatter">Scatter</option>
+          <option value="histogram">Histogram</option>
+          <option value="pie">Pie</option>
+          <option value="doughnut">Donut</option>
+          <option value="heatmap">Heatmap</option>
+          <option value="pictogram">Pictogram</option>
+          <option value="radar">Radar</option>
+          <option value="bubble">Bubble</option>
+          <option value="boxplot">Box plot</option>
+          <option value="gauge">Gauge</option>
+          <option value="stacked">Stacked bar</option>
+          <option value="overlap">Overlapping bar</option>
+          <option value="corrheatmap">Correlation heatmap</option>
+          <option value="scattermatrix">Scatter matrix</option>
+        </select>
+        <select id="xCol"></select>
+        <select id="yCol"></select>
+        <select id="binsCol" title="Number of bins">
+          <option value="8">8 bins</option>
+          <option value="12" selected>12 bins</option>
+          <option value="20">20 bins</option>
+          <option value="30">30 bins</option>
+        </select>
+        <select id="valueCol" title="Value to aggregate (count, or sum of a numeric column)"></select>
+        <input type="number" id="goalInput" title="Target goal value" placeholder="Goal">
+      </div>
+    </div>
+    <div class="chart-panel">
+      <div class="chart-toolbar">
+        <button type="button" class="btn ghost small" id="colorsBtn" title="Customize chart colors">
+          <span class="btn-ic">◐</span> Colors
+        </button>
+        <button type="button" class="btn ghost small" id="toggle3D" title="Toggle 3D chart style (bar, histogram, pie, donut, stacked bar, overlapping bar, gauge)">
+          <span class="btn-ic">▦</span> 3D
+        </button>
+        <button type="button" class="btn ghost small" id="toggleTrend" title="Show a moving-average trend line overlay (line, area)">
+          <span class="btn-ic">∿</span> Trend
+        </button>
+        <button type="button" class="btn ghost small" id="resetZoomBtn" title="Reset zoom/pan (scroll or drag on the chart to zoom, then drag to pan)">
+          <span class="btn-ic">⤢</span> Reset zoom
+        </button>
+        <button type="button" class="btn ghost small" id="exportPngBtn" title="Export the current chart as a PNG image, with the auto-generated insight caption included below it">
+          <span class="btn-ic">⭳</span> Export PNG
+        </button>
+        <button type="button" class="btn ghost small" id="exportPdfBtn" title="Export the current chart as a PDF, with the auto-generated insight caption included below it">
+          <span class="btn-ic">⭳</span> Export PDF
+        </button>
+        <button type="button" class="btn ghost small" id="exportHtmlBtn" title="Export the current chart as a standalone HTML file — opens in any browser, no Readeout needed">
+          <span class="btn-ic">⭳</span> Export HTML
+        </button>
+      </div>
+      <div class="export-bg-row" id="exportBgRow">
+        <span>Export background</span>
+        <button type="button" class="mini-chip" data-bg="#171B22">Dark</button>
+        <button type="button" class="mini-chip" data-bg="#FFFFFF">Light</button>
+        <input type="color" id="exportBg" value="#171B22" title="Custom export background color">
+        <button type="button" class="export-folder-btn" id="chooseExportFolderBtn" title="Choose a dedicated folder for PNG/PDF exports, instead of your browser's default Downloads folder">
+          <span class="btn-ic">📁</span> <span class="exportFolderLabel">Downloads (default)</span>
+        </button>
+      </div>
+      <div class="color-panel" id="colorPanel">
+        <div class="color-panel-head">
+          <span>Series colors</span>
+          <button type="button" class="btn ghost small" id="resetColorsBtn">Reset defaults</button>
+        </div>
+        <div class="color-swatches" id="colorSwatches"></div>
+        <div class="heat-colors" id="heatColorRow">
+          <label>Low <input type="color" id="heatLow"></label>
+          <label>High <input type="color" id="heatHigh"></label>
+        </div>
+      </div>
+      <div class="chip-row" id="chipRow"></div>
+      <div class="chart-box" id="chartBox"><canvas id="chart"></canvas><div class="pictogram-box" id="pictogramBox"></div><div class="scatter-matrix-box" id="scatterMatrixBox"></div></div>
+      <div class="chart-hint" id="chartHint"></div>
+      <div class="insight-caption" id="insightCaption"></div>
+    </div>
+    </div>
+
+    <div id="dashboardView" style="display:none;">
+      <div class="panel-title">
+        <h3>Dashboard</h3>
+        <div class="controls">
+          <button type="button" class="btn ghost small" id="addChartBtn">+ Add chart</button>
+          <button type="button" class="btn ghost small" id="exportDashboardPngBtn" title="Export the whole dashboard as one PNG image">
+            <span class="btn-ic">⭳</span> Export PNG
+          </button>
+          <button type="button" class="btn ghost small" id="exportDashboardPdfBtn" title="Export the whole dashboard as a PDF">
+            <span class="btn-ic">⭳</span> Export PDF
+          </button>
+          <button type="button" class="btn ghost small" id="exportDashboardHtmlBtn" title="Export the whole dashboard as a standalone HTML file — opens in any browser, no Readeout needed">
+            <span class="btn-ic">⭳</span> Export HTML
+          </button>
+          <button type="button" class="btn ghost small" id="clearDashboardBtn">Clear all</button>
+        </div>
+      </div>
+      <div class="export-bg-row" id="dashExportBgRow">
+        <span>Export background</span>
+        <button type="button" class="mini-chip" data-dash-bg="#171B22">Dark</button>
+        <button type="button" class="mini-chip" data-dash-bg="#FFFFFF">Light</button>
+        <input type="color" id="dashExportBg" value="#171B22" title="Custom export background color — applies to both the per-chart and whole-dashboard PNG/PDF exports">
+        <button type="button" class="export-folder-btn" id="chooseExportFolderBtnDash" title="Choose a dedicated folder for PNG/PDF exports, instead of your browser's default Downloads folder">
+          <span class="btn-ic">📁</span> <span class="exportFolderLabel">Downloads (default)</span>
+        </button>
+      </div>
+      <div class="dashboard-empty" id="dashboardEmpty">No charts yet — tap <strong>+ Add chart</strong> to build your dashboard. Charts and their settings are saved automatically in this browser.</div>
+      <div class="dashboard-grid" id="dashboardGrid"></div>
+    </div>
+
+    <div class="panel-title">
+      <h3>Raw data</h3>
+      <div class="controls">
+        <span class="filter-chip" id="tableFilterChip" style="display:none;"></span>
+        <span class="row-count mono" id="rowCountTop"></span>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr id="tableHead"></tr></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+    <div class="row-count" id="rowCountBottom"></div>
+
+  </div>
+
+  <footer>
+    <img class="footer-logo" src="https://cdn.phototourl.com/free/2026-07-10-2573f064-8e06-4b8c-a495-a47d53608137.png" alt="Readeout logo" loading="lazy" decoding="async">
+    READEOUT — runs entirely in your browser. Nothing is uploaded anywhere.
+    <div class="footer-links"><a href="#" onclick="document.getElementById('docsModal').style.display='flex';return false;">Documentation</a><span class="footer-dot">·</span><a href="#" onclick="document.getElementById('privacyModal').style.display='flex';return false;">Privacy Policy</a><span class="footer-dot">·</span><a href="#" onclick="document.getElementById('termsModal').style.display='flex';return false;">Terms of Service</a></div>
+    <div class="footer-credit">© 2026 Readeout. Built with ♥️ by BeepeeLabs</div>
+  </footer>
+
+  <!-- ---- Documentation modal ---- -->
+  <div class="legal-modal" id="docsModal">
+    <div class="legal-panel wide">
+      <div class="legal-head">
+        <h2>Documentation</h2>
+        <button class="legal-close" onclick="document.getElementById('docsModal').style.display='none';">✕</button>
+      </div>
+      <div class="legal-body">
+        <div class="legal-updated">Readeout · reference guide</div>
+
+        <div class="doc-toc">
+          <a href="#doc-start">Quick start</a>
+          <a href="#doc-files">Supported files</a>
+          <a href="#doc-charts">Chart types</a>
+          <a href="#doc-interact">Chart interactions</a>
+          <a href="#doc-dashboard">Dashboard</a>
+          <a href="#doc-export">Exporting</a>
+          <a href="#doc-history">Session history</a>
+          <a href="#doc-privacy">Data &amp; privacy</a>
+        </div>
+
+        <div class="legal-callout teal">
+          <p><strong>The short version:</strong> Drop in a CSV or JSON file, pick columns, and Readeout builds summary statistics and charts instantly — all in your browser, nothing uploaded.</p>
+        </div>
+
+        <h3 id="doc-start">Quick start</h3>
+        <p>Drag a file onto the drop zone, or use <strong>Browse</strong> to pick one from disk. Once loaded, Readeout profiles every column (type, min/max, mean, distinct count, and so on) and shows them in the readout panel above the raw data table.</p>
+        <p>Pick an X column (and a Y column where the chart type needs one), choose a chart type from the dropdown, and the chart renders live. Tick the insight checkboxes under the chart to choose which auto-generated observations travel with a PNG/PDF export.</p>
+
+        <h3 id="doc-files">Supported files</h3>
+        <div class="doc-grid">
+          <div class="doc-card"><b>.csv</b><span>Comma-separated values with a header row. Column types are auto-detected (number, date, text, category).</span></div>
+          <div class="doc-card"><b>.json</b><span>An array of flat objects, each one treated as a row. Nested fields are not parsed.</span></div>
+        </div>
+        <p class="dim">Max file size is 25MB. Everything is parsed client-side — larger files simply take longer, they aren't rejected for content reasons.</p>
+
+        <h3 id="doc-charts">Chart types</h3>
+        <table class="doc-table">
+          <thead><tr><th>Chart</th><th>Best for</th></tr></thead>
+          <tbody>
+            <tr><td>Bar / Stacked / Overlapping bar</td><td class="dim">Comparing categories, or a category broken into sub-groups</td></tr>
+            <tr><td>Line / Area</td><td class="dim">Trends over an ordered axis, e.g. dates</td></tr>
+            <tr><td>Scatter / Bubble</td><td class="dim">Relationship between two (or three, with bubble size) numeric columns</td></tr>
+            <tr><td>Histogram</td><td class="dim">Distribution of a single numeric column</td></tr>
+            <tr><td>Pie / Donut</td><td class="dim">Share of a whole across a small number of categories</td></tr>
+            <tr><td>Radar</td><td class="dim">Comparing several numeric metrics across categories at once</td></tr>
+            <tr><td>Box plot</td><td class="dim">Spread, median, and outliers of a numeric column</td></tr>
+            <tr><td>Gauge</td><td class="dim">A single value against a min/max range</td></tr>
+            <tr><td>Heatmap / Correlation heatmap</td><td class="dim">Intensity across two categories, or correlation strength across every numeric column pair</td></tr>
+            <tr><td>Pictogram</td><td class="dim">Category counts as repeated icons, for quick at-a-glance reading</td></tr>
+            <tr><td>Scatter matrix</td><td class="dim">Pairwise relationships across every numeric column in the dataset at once</td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="doc-interact">Chart interactions</h3>
+        <p>Beyond picking a type and axes, a few controls above the chart change how it renders or behaves:</p>
+        <ul>
+          <li><strong>3D</strong> — adds a pseudo-3D depth style to bar, histogram, pie, donut, stacked bar, overlapping bar, and gauge charts. Switching to a chart type that doesn't support it turns it back off automatically.</li>
+          <li><strong>Trend</strong> — overlays a moving-average trend line on line and area charts.</li>
+          <li><strong>Goal</strong> — on a gauge chart, sets the target value the gauge is measured against.</li>
+          <li><strong>Zoom &amp; pan</strong> — on charts with a continuous axis (bar, line, area, histogram, stacked, overlap, scatter, bubble), scroll or pinch to zoom, hold Ctrl/Cmd and drag to pan, and double-click or use <strong>Reset zoom</strong> to return to the default view.</li>
+          <li><strong>Click to filter</strong> — clicking a bar or segment on bar, stacked bar, overlapping bar, or histogram charts filters the data table below to just that group; click the filter chip to clear it.</li>
+        </ul>
+
+        <h3 id="doc-dashboard">Dashboard</h3>
+        <p>Switch to the <strong>Dashboard</strong> tab to pin multiple charts side by side instead of viewing one at a time. Tap <strong>+ Add chart</strong> to create a card, then set its type and columns independently of the single-chart view. Cards and their settings are saved automatically in this browser, so the dashboard is still there next time you open Readeout with the same session.</p>
+
+        <h3 id="doc-export">Exporting</h3>
+        <p>Every chart — single view or dashboard card — can be exported as a <strong>PNG</strong> or a <strong>PDF</strong>, with the ticked insight lines included as a caption underneath. The whole dashboard can also be exported as one composite image or PDF via the buttons above the dashboard grid.</p>
+        <ul>
+          <li><strong>Background color</strong> — pick any export background from the swatches or the color picker; chart text and gridlines automatically switch between light and dark styling to stay readable.</li>
+          <li><strong>Export folder</strong> — optionally choose a dedicated folder (where your browser supports it) so exports stop landing in the default Downloads folder.</li>
+          <li><strong>Resolution</strong> — exports are rendered at a higher pixel density than what's on screen, so PNGs and PDFs stay sharp even when zoomed in or printed.</li>
+        </ul>
+
+        <h3 id="doc-history">Session history</h3>
+        <p>Readeout keeps a rolling history of recent sessions (up to 15) so you can pick up where you left off. Open it with the <strong>History</strong> button. Smaller datasets are stored in full; larger ones are kept as metadata only (column names and stats, not every row) to stay within browser storage limits. History lives entirely in <span class="mono">localStorage</span> on this device — clearing your browser data clears it too.</p>
+
+        <h3 id="doc-privacy">Data &amp; privacy</h3>
+        <p>Readeout has no backend. Files you load are read and processed entirely in your browser; nothing is uploaded, transmitted, or seen by anyone else. See the full <a href="#" onclick="document.getElementById('docsModal').style.display='none';document.getElementById('privacyModal').style.display='flex';return false;">Privacy Policy</a> for details.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ---- Privacy Policy modal ---- -->
+  <div class="legal-modal" id="privacyModal">
+    <div class="legal-panel">
+      <div class="legal-head">
+        <h2>Privacy Policy</h2>
+        <button class="legal-close" onclick="document.getElementById('privacyModal').style.display='none';">✕</button>
+      </div>
+      <div class="legal-body">
+        <div class="legal-updated">Last updated: July 9, 2026</div>
+        <div class="legal-callout teal">
+          <p><strong>The short version:</strong> Readeout runs entirely in your browser. Any file you open is read and processed locally on your device. We do not upload, transmit, store, or have access to your data — ever.</p>
+        </div>
+
+        <h3>What Readeout Does With Your Data</h3>
+        <p>When you drop a file into Readeout, it is read directly by your browser using standard client-side file APIs. Parsing, charting, and every calculation you see happen locally, on your own machine. At no point is the file's contents sent to Readeout's servers or to any third party, because Readeout does not have a server that receives your data.</p>
+        <p>If you close the tab or refresh the page, the data is gone — Readeout does not persist your files anywhere.</p>
+
+        <h3>Information We Collect</h3>
+        <p>Readeout itself collects no personal data and has no account system, login, or tracking of file contents. Depending on how you access the page, standard web infrastructure may log limited technical information, such as:</p>
+        <ul>
+          <li>Basic request metadata (e.g. IP address, browser type, timestamp) that any web server or CDN logs by default.</li>
+          <li>Aggregated, anonymous usage analytics, if enabled, used only to understand overall traffic — never tied to the content of any file you analyze.</li>
+        </ul>
+        <p class="dim">We do not sell data, run advertising trackers, or share information with data brokers.</p>
+
+        <h3>Cookies &amp; Local Storage</h3>
+        <p>Readeout may use your browser's local storage to remember interface preferences, such as your last-used chart colors or layout settings. This information stays on your device and is never transmitted anywhere.</p>
+
+        <h3>Third-Party Services</h3>
+        <p>Readeout loads a small number of third-party libraries (such as charting and font libraries) from public content delivery networks so the app can render properly. These services may receive standard network request metadata (like your IP address) as an inherent part of serving files over the web, but they do not receive your uploaded data.</p>
+
+        <h3>Children's Privacy</h3>
+        <p>Readeout is not directed at children under 13, and we do not knowingly collect personal information from children.</p>
+
+        <h3>Changes to This Policy</h3>
+        <p>We may update this policy from time to time to reflect changes in how Readeout works. The "Last updated" date at the top of this section will always reflect the most recent revision.</p>
+
+        <h3>Contact</h3>
+        <p>Questions about this policy can be directed to the team at BeepeeLabs.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ---- Terms of Service modal ---- -->
+  <div class="legal-modal" id="termsModal">
+    <div class="legal-panel">
+      <div class="legal-head">
+        <h2>Terms of Service</h2>
+        <button class="legal-close" onclick="document.getElementById('termsModal').style.display='none';">✕</button>
+      </div>
+      <div class="legal-body">
+        <div class="legal-updated">Last updated: July 9, 2026</div>
+        <div class="legal-callout amber">
+          <p><strong>The short version:</strong> Readeout is provided as a free, browser-based tool, "as is," with no warranties. You're responsible for the files you choose to analyze and any decisions you make based on the output.</p>
+        </div>
+
+        <h3>Acceptance of Terms</h3>
+        <p>By accessing or using Readeout, you agree to be bound by these Terms of Service. If you do not agree to these terms, please do not use the tool.</p>
+
+        <h3>Description of Service</h3>
+        <p>Readeout is a client-side data analysis instrument that runs entirely within your web browser. It allows you to load tabular data files and generate summary statistics, charts, and exports. All processing occurs locally on your device; Readeout does not operate a backend that stores or transmits your files.</p>
+
+        <h3>Use of the Service</h3>
+        <p>You agree to use Readeout only for lawful purposes. You are solely responsible for:</p>
+        <ul>
+          <li>The content, accuracy, and legality of any data you load into the tool.</li>
+          <li>Ensuring you have the right to view and analyze any file you open with Readeout.</li>
+          <li>Any decisions, conclusions, or actions you take based on Readeout's output.</li>
+        </ul>
+
+        <h3>No Warranty</h3>
+        <p>Readeout is provided <strong>"as is"</strong> and <strong>"as available,"</strong> without warranties of any kind, whether express or implied, including but not limited to accuracy, reliability, fitness for a particular purpose, or non-infringement. Charts, statistics, and summaries are generated automatically and may contain errors; always verify results independently before relying on them for important decisions.</p>
+
+        <h3>Limitation of Liability</h3>
+        <p>To the fullest extent permitted by law, BeepeeLabs and the creators of Readeout shall not be liable for any indirect, incidental, special, or consequential damages arising out of or related to your use of, or inability to use, the service — including but not limited to data loss, business interruption, or inaccurate analysis.</p>
+
+        <h3>Intellectual Property</h3>
+        <p>The Readeout name, logo, and interface design are the property of BeepeeLabs. You retain all rights to any data files you load into the tool; Readeout claims no ownership over your data, which is never transmitted to us in the first place.</p>
+
+        <h3>Third-Party Libraries</h3>
+        <p>Readeout uses open-source and publicly hosted libraries (such as charting and font libraries) to function. Use of these libraries is subject to their respective licenses.</p>
+
+        <h3>Changes to the Service or Terms</h3>
+        <p>We may update Readeout or these Terms at any time without prior notice. Continued use of the tool after changes take effect constitutes acceptance of the revised Terms.</p>
+
+        <h3>Termination</h3>
+        <p>Since Readeout requires no account and stores no user data, there is nothing to terminate on our end. You may stop using the tool at any time simply by closing the page.</p>
+
+        <h3>Contact</h3>
+        <p>Questions about these Terms can be directed to the team at BeepeeLabs.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+
+</body>
+</html>
